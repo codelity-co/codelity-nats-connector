@@ -1,4 +1,4 @@
-module bitbucket.org/codelity-co/codelity-nats-connector
+module github.com/codelity-co/codelity-nats-connector
 
 go 1.13
 

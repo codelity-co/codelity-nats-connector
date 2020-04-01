@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	connectorPkg "bitbucket.org/codelity-co/codelity-nats-connector/pkg/nats/connector"
+	connectorPkg "github.com/codelity-co/codelity-nats-connector/pkg/nats/connector"
 
 	nats "github.com/nats-io/nats.go"
 	natstest "github.com/nats-io/nats-server/test"
