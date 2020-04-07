@@ -1,13 +1,18 @@
 package connector
 
 import (
+	"time"
+
 	"github.com/nats-io/nats.go"
 )
 
 type NatsConnector struct {
+	AllowReconnect bool
+	MaxReconnect int
 	NatsConnection *nats.Conn
 	NatsSubscription *nats.Subscription
 	QueueGroup string
+	ReconnectWait time.Duration
 	ServerUrls string
 	SubscriptionChannel chan *nats.Msg
 	Subject string
@@ -16,7 +21,12 @@ type NatsConnector struct {
 type SubscriberFunction func(*nats.Msg)
 
 func(c *NatsConnector) Connect() error {
-	nc, err := nats.Connect(c.ServerUrls)
+	opts := nats.GetDefaultOptions()
+	opts.Url = c.ServerUrls
+	opts.AllowReconnect = c.AllowReconnect
+	opts.ReconnectWait = c.ReconnectWait
+	opts.MaxReconnect = c.MaxReconnect
+	nc, err := opts.Connect()
 	if (err != nil) {
 		return err
 	}
