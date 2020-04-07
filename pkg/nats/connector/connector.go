@@ -8,11 +8,11 @@ import (
 
 type NatsConnector struct {
 	AllowReconnect bool
-	MaxReconnect int
 	NatsConnection *nats.Conn
 	NatsSubscription *nats.Subscription
 	QueueGroup string
-	ReconnectWait time.Duration
+	ReconnectMaxRetry int
+	ReconnectWaitTime time.Duration
 	ServerUrls string
 	SubscriptionChannel chan *nats.Msg
 	Subject string
@@ -24,8 +24,8 @@ func(c *NatsConnector) Connect() error {
 	opts := nats.GetDefaultOptions()
 	opts.Url = c.ServerUrls
 	opts.AllowReconnect = c.AllowReconnect
-	opts.ReconnectWait = c.ReconnectWait
-	opts.MaxReconnect = c.MaxReconnect
+	opts.ReconnectWait = c.ReconnectWaitTime
+	opts.MaxReconnect = c.ReconnectMaxRetry
 	nc, err := opts.Connect()
 	if (err != nil) {
 		return err
