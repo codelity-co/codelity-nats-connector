@@ -124,7 +124,7 @@ var (
 		Describe("NatsConnector QueueSubscribe", func() {
 
 			It("Connection Positive Test", func() {
-				subscriptionChannel := make(chan *nats.Msg)
+				subscriptionChannel := make(chan map[string]interface{})
 				connector := &connectorPkg.NatsConnector{
 					QueueGroup: "queueGroup",
 					ServerUrls: "nats://localhost:4222",
@@ -138,9 +138,10 @@ var (
 				Expect(err1).To(BeNil(), "err1 = %v", err1)
 				Expect(connector.NatsConnection).NotTo(BeNil())
 
-				err2 := connector.QueueSubscribe(func(m *nats.Msg){
-					connector.SubscriptionChannel <- m
-					fmt.Println(fmt.Sprintf("Received message = %v", m))
+				err2 := connector.QueueSubscribe(func(options map[string]interface{}){
+
+					connector.SubscriptionChannel <- options
+					fmt.Println(fmt.Sprintf("Received message = %v", options))
 				})
 				Expect(err2).To(BeNil(), "err2 = %v", err2)
 				Expect(connector.NatsSubscription).NotTo(BeNil(), "subscription = %v", connector.NatsSubscription)
@@ -152,14 +153,14 @@ var (
 				err := connector.NatsConnection.PublishMsg(testMessage)
 				Expect(err).To(BeNil())
 
-				message := <- connector.SubscriptionChannel
-
+				payload := <- connector.SubscriptionChannel
+				message := payload["natsMsg"].(*nats.Msg)
 				Expect(message.Subject).To(Equal("test.queue"), "Subject = %v", message.Subject)
 				Expect(string(message.Data)).To(Equal("test"), "Data = %v", string(message.Data))
 			})
 
 			It("Connection Negative Test", func() {
-				subscriptionChannel := make(chan *nats.Msg)
+				subscriptionChannel := make(chan map[string]interface{})
 				connector := &connectorPkg.NatsConnector{
 					QueueGroup: "queueGroup",
 					ServerUrls: "nats://localhost:4222",
@@ -173,7 +174,7 @@ var (
 				Expect(err1).To(BeNil(), "err1 = %v", err1)
 				Expect(connector.NatsConnection).NotTo(BeNil())
 
-				err2 := connector.QueueSubscribe(func(m *nats.Msg){
+				err2 := connector.QueueSubscribe(func(m map[string]interface{}){
 					connector.SubscriptionChannel <- m
 					fmt.Println(fmt.Sprintf("Received message = %v", m))
 				})
