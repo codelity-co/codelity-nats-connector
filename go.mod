@@ -10,4 +10,5 @@ require (
 	github.com/nats-io/stan.go v0.6.0
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
+	github.com/sirupsen/logrus v1.5.0
 )

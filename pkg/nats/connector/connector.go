@@ -7,6 +7,15 @@ import (
 
 	nats "github.com/nats-io/nats.go"
 	stan "github.com/nats-io/stan.go"
+	"github.com/sirupsen/logrus"
+)
+
+var (
+	err error
+	nc *nats.Conn
+	sc stan.Conn
+	hostname string
+	stanSubscription stan.Subscription
 )
 
 type NatsConnector struct {
@@ -28,44 +37,94 @@ type NatsConnector struct {
 
 type SubscriberFunction func(map[string]interface{})
 
-func (c *NatsConnector) Connect() error {
+func (c *NatsConnector) Connect(logger *logrus.Logger) error {
 	opts := nats.GetDefaultOptions()
 	opts.Url = c.ServerUrls
 	opts.AllowReconnect = c.AllowReconnect
 	opts.ReconnectWait = c.ReconnectWaitTime
 	opts.MaxReconnect = c.ReconnectMaxRetry
-	nc, err := opts.Connect()
-	if err != nil {
-		return err
+	if logger != nil {
+		logger.Debug(fmt.Sprintf("opts = %v", opts))
 	}
-	c.NatsConnection = nc
-	return nil
-}
-
-func (c *NatsConnector) QueueSubscribe(fn SubscriberFunction) error {
-	if c.EnableStreaming && c.StanConnection == nil {
-		if len(c.StanClusterId) == 0 {
-			return fmt.Errorf("StanClusterId cannot be empty")
-		}
-		if len(c.StanChannelId) == 0 {
-			return fmt.Errorf("StanChannelId cannot be empty")
-		}
-		hostname, _ := os.Hostname()
-		sc, err := stan.Connect(c.StanClusterId, hostname, stan.NatsConn(c.NatsConnection))
+	if c.NatsConnection == nil {
+		nc, err = opts.Connect()
 		if err != nil {
 			return err
 		}
-		c.StanConnection = &sc
-		return nil
+		c.NatsConnection = nc
 	}
 
-	var err error
-
 	if c.EnableStreaming {
+		if c.StanConnection == nil {
+			if len(c.StanClusterId) == 0 {
+				return fmt.Errorf("StanClusterId cannot be empty")
+			}
+			if len(c.StanChannelId) == 0 {
+				return fmt.Errorf("StanChannelId cannot be empty")
+			}
+			hostname, err = os.Hostname()
+			if err != nil {
+				return err
+			}
+			if logger != nil {
+				logger.Debug(fmt.Sprintf("c.StanClusterId = %v", c.StanClusterId))
+				logger.Debug(fmt.Sprintf("c.StanChannelId = %v", c.StanChannelId))
+				logger.Debug(fmt.Sprintf("hostname = %v", hostname))
+				logger.Debug("Connecting to NATS Streaming Server")
+			}
+			sc, err = stan.Connect(c.StanClusterId, hostname, stan.NatsConn(nc))
+			if err != nil {
+				return err
+			}
+			c.StanConnection = &sc
+			if logger != nil {
+				logger.Debug(fmt.Sprintf("c.StanConnection = %v", c.StanConnection))
+				logger.Debug("Connected NATS Streaming Serversuccessfully")
+			}
+			
+		}
+	}
 
-		var sc stan.Conn = *c.StanConnection
-		var subsc stan.Subscription
-		subsc, err = sc.QueueSubscribe(c.StanChannelId, c.QueueGroup, func(m *stan.Msg) {
+	return nil
+}
+
+func (c *NatsConnector) QueueSubscribe(logger *logrus.Logger, fn SubscriberFunction) error {
+
+	if logger != nil {
+		logger.Debug("Running NatsConnector.QueueSubscribe...")
+		logger.Debug(fmt.Sprintf("natsConnector.EnableStreaming = %v", c.EnableStreaming))
+		logger.Debug(fmt.Sprintf("natsConnector.StanConnection = %v", c.StanConnection))	
+	}
+
+	if c.EnableStreaming && c.StanConnection == nil {
+		if logger != nil {
+			logger.Debug("Call natsConnector.Connect...")
+		}
+		err = c.Connect(logger)
+		if err != nil {
+			return err
+		}
+		if logger != nil {
+			logger.Debug(fmt.Sprintf("natsConnector.StanConnection = %v", c.StanConnection))
+		}
+		
+	}
+
+	if c.EnableStreaming && c.StanConnection != nil {
+
+		if len(c.StanChannelId) == 0 {
+			return fmt.Errorf("StanChannelId cannot be empty")
+		}
+		if len(c.QueueGroup) == 0 {
+			return fmt.Errorf("QueueGroup cannot be empty")
+		}
+		
+		if logger != nil {
+			logger.Debug("Calling StanConnection.QueueSubscribe...")
+		}
+		
+		sc = *c.StanConnection
+		stanSubscription, err = sc.QueueSubscribe(c.StanChannelId, c.QueueGroup, func(m *stan.Msg) {
 			payload := map[string]interface{}{
 				"stanMsg": m,
 			}
@@ -74,14 +133,33 @@ func (c *NatsConnector) QueueSubscribe(fn SubscriberFunction) error {
 		if err != nil {
 			return err
 		}
-		c.StanSubscription = &subsc
+		c.StanSubscription = &stanSubscription
+
+		if logger != nil {
+			logger.Debug("Called StanConnection.QueueSubscribe successfully")
+		}
+
 	} else {
+
+		if logger != nil {
+			logger.Debug("Calling NatsConnection.QueueSubscribe...")
+		}
+
 		c.NatsSubscription, err = c.NatsConnection.QueueSubscribe(c.Subject, c.QueueGroup, func(m *nats.Msg) {
 			payload := map[string]interface{}{
 				"natsMsg": m,
 			}
 			go fn(payload)
 		})
+
+		if err != nil {
+			return err
+		}
+
+		if logger != nil {
+			logger.Debug("Called NatsConnection.QueueSubscribe successfully")
+		}
+
 	}
 
 	return err

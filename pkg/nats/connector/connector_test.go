@@ -102,7 +102,7 @@ var (
 				}
 				Expect(connector.NatsConnection).To(BeNil())
 
-				err1 := connector.Connect()
+				err1 := connector.Connect(nil)
 
 				Expect(err1).To(BeNil(), "err1 = %v", err1)
 				Expect(connector.NatsConnection).NotTo(BeNil())
@@ -114,7 +114,7 @@ var (
 				}
 				Expect(connector.NatsConnection).To(BeNil())
 
-				err1 := connector.Connect()
+				err1 := connector.Connect(nil)
 				Expect(err1).NotTo(BeNil(), "err1 = %v", err1)
 				Expect(connector.NatsConnection).To(BeNil())
 			})
@@ -133,15 +133,13 @@ var (
 				}
 				Expect(connector.NatsConnection).To(BeNil())
 
-				err1 := connector.Connect()
+				err1 := connector.Connect(nil)
 
 				Expect(err1).To(BeNil(), "err1 = %v", err1)
 				Expect(connector.NatsConnection).NotTo(BeNil())
 
-				err2 := connector.QueueSubscribe(func(options map[string]interface{}){
-
+				err2 := connector.QueueSubscribe(nil, func(options map[string]interface{}){
 					connector.SubscriptionChannel <- options
-					fmt.Println(fmt.Sprintf("Received message = %v", options))
 				})
 				Expect(err2).To(BeNil(), "err2 = %v", err2)
 				Expect(connector.NatsSubscription).NotTo(BeNil(), "subscription = %v", connector.NatsSubscription)
@@ -169,12 +167,12 @@ var (
 				}
 				Expect(connector.NatsConnection).To(BeNil())
 
-				err1 := connector.Connect()
+				err1 := connector.Connect(nil)
 
 				Expect(err1).To(BeNil(), "err1 = %v", err1)
 				Expect(connector.NatsConnection).NotTo(BeNil())
 
-				err2 := connector.QueueSubscribe(func(m map[string]interface{}){
+				err2 := connector.QueueSubscribe(nil, func(m map[string]interface{}){
 					connector.SubscriptionChannel <- m
 					fmt.Println(fmt.Sprintf("Received message = %v", m))
 				})
