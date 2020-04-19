@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	connectorPkg "github.com/codelity-co/codelity-nats-connector/pkg/nats/connector"
 
@@ -138,7 +139,7 @@ var (
 				Expect(err1).To(BeNil(), "err1 = %v", err1)
 				Expect(connector.NatsConnection).NotTo(BeNil())
 
-				err2 := connector.QueueSubscribe(nil, func(options map[string]interface{}){
+				err2 := connector.QueueSubscribe(nil, func(logger *logrus.Logger, options map[string]interface{}){
 					connector.SubscriptionChannel <- options
 				})
 				Expect(err2).To(BeNil(), "err2 = %v", err2)
@@ -172,7 +173,7 @@ var (
 				Expect(err1).To(BeNil(), "err1 = %v", err1)
 				Expect(connector.NatsConnection).NotTo(BeNil())
 
-				err2 := connector.QueueSubscribe(nil, func(m map[string]interface{}){
+				err2 := connector.QueueSubscribe(nil, func(logger *logrus.Logger, m map[string]interface{}){
 					connector.SubscriptionChannel <- m
 					fmt.Println(fmt.Sprintf("Received message = %v", m))
 				})

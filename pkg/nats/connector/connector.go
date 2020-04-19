@@ -31,11 +31,12 @@ type NatsConnector struct {
 	StanConnection      *stan.Conn
 	StanClusterId       string
 	StanChannelId       string
+	StanDurableName		  string
 	StanSubscription    *stan.Subscription
 	Subject             string
 }
 
-type SubscriberFunction func(map[string]interface{})
+type SubscriberFunction func(*logrus.Logger, map[string]interface{})
 
 func (c *NatsConnector) Connect(logger *logrus.Logger) error {
 	opts := nats.GetDefaultOptions()
@@ -124,12 +125,31 @@ func (c *NatsConnector) QueueSubscribe(logger *logrus.Logger, fn SubscriberFunct
 		}
 		
 		sc = *c.StanConnection
-		stanSubscription, err = sc.QueueSubscribe(c.StanChannelId, c.QueueGroup, func(m *stan.Msg) {
-			payload := map[string]interface{}{
-				"stanMsg": m,
+		if len(c.StanDurableName) > 0 {
+			if logger != nil {
+				logger.Debug(fmt.Sprintf("c.StanDurableName = %v", c.StanDurableName))
 			}
-			go fn(payload)
-		})
+			stanSubscription, err = sc.QueueSubscribe(c.StanChannelId, c.QueueGroup, func(m *stan.Msg) {
+				if logger != nil {
+					logger.Debug(fmt.Sprintf("stan.Msg = %v", *m))
+				}
+				payload := map[string]interface{}{
+					"stanMsg": m,
+				}
+				go fn(logger, payload)
+			}, stan.DurableName(c.StanDurableName))
+		} else {
+			stanSubscription, err = sc.QueueSubscribe(c.StanChannelId, c.QueueGroup, func(m *stan.Msg) {
+				if logger != nil {
+					logger.Debug(fmt.Sprintf("stan.Msg = %v", *m))
+				}
+				payload := map[string]interface{}{
+					"stanMsg": m,
+				}
+				go fn(logger, payload)
+			})
+		}
+
 		if err != nil {
 			return err
 		}
@@ -146,10 +166,13 @@ func (c *NatsConnector) QueueSubscribe(logger *logrus.Logger, fn SubscriberFunct
 		}
 
 		c.NatsSubscription, err = c.NatsConnection.QueueSubscribe(c.Subject, c.QueueGroup, func(m *nats.Msg) {
+			if logger != nil {
+				logger.Debug(fmt.Sprintf("nats.Msg = %v", *m))
+			}
 			payload := map[string]interface{}{
 				"natsMsg": m,
 			}
-			go fn(payload)
+			go fn(logger, payload)
 		})
 
 		if err != nil {
