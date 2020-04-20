@@ -32,6 +32,7 @@ type NatsConnector struct {
 	StanClusterId       string
 	StanChannelId       string
 	StanDurableName		  string
+	StanSubscriberMaxInFlightMessages int
 	StanSubscription    *stan.Subscription
 	Subject             string
 }
@@ -137,7 +138,7 @@ func (c *NatsConnector) QueueSubscribe(logger *logrus.Logger, fn SubscriberFunct
 					"stanMsg": m,
 				}
 				go fn(logger, payload)
-			}, stan.DurableName(c.StanDurableName))
+			}, stan.DurableName(c.StanDurableName), stan.MaxInflight(c.StanSubscriberMaxInFlightMessages))
 		} else {
 			stanSubscription, err = sc.QueueSubscribe(c.StanChannelId, c.QueueGroup, func(m *stan.Msg) {
 				if logger != nil {
@@ -147,7 +148,7 @@ func (c *NatsConnector) QueueSubscribe(logger *logrus.Logger, fn SubscriberFunct
 					"stanMsg": m,
 				}
 				go fn(logger, payload)
-			})
+			}, stan.MaxInflight(c.StanSubscriberMaxInFlightMessages))
 		}
 
 		if err != nil {
