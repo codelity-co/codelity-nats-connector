@@ -11,43 +11,48 @@ import (
 )
 
 var (
-	err error
-	nc *nats.Conn
-	sc stan.Conn
-	hostname string
+	err              error
+	nc               *nats.Conn
+	sc               stan.Conn
+	hostname         string
 	stanSubscription stan.Subscription
 )
 
 type NatsConnector struct {
-	AllowReconnect      bool
-	EnableStreaming     bool
-	QueueGroup          string
-	NatsConnection      *nats.Conn
-	NatsSubscription    *nats.Subscription
-	ReconnectMaxRetry   int
-	ReconnectWaitTime   time.Duration
-	ServerUrls          string
-	SubscriptionChannel chan map[string]interface{}
-	StanConnection      *stan.Conn
-	StanClusterId       string
-	StanChannelId       string
-	StanDurableName		  string
+	AllowReconnect                    bool
+	EnableStreaming                   bool
+	QueueGroup                        string
+	NatsConnection                    *nats.Conn
+	NatsSubscription                  *nats.Subscription
+	ReconnectMaxRetry                 int
+	ReconnectWaitTime                 time.Duration
+	ServerUrls                        string
+	SubscriptionChannel               chan map[string]interface{}
+	StanConnection                    *stan.Conn
+	StanClusterId                     string
+	StanChannelId                     string
+	StanDurableName                   string
+	StanManualAcknowledge             bool
 	StanSubscriberMaxInFlightMessages int
-	StanSubscription    *stan.Subscription
-	Subject             string
+	StanSubscription                  *stan.Subscription
+	Subject                           string
 }
 
 type SubscriberFunction func(*logrus.Logger, map[string]interface{})
 
+// Connect NATS server
 func (c *NatsConnector) Connect(logger *logrus.Logger) error {
 	opts := nats.GetDefaultOptions()
 	opts.Url = c.ServerUrls
 	opts.AllowReconnect = c.AllowReconnect
 	opts.ReconnectWait = c.ReconnectWaitTime
 	opts.MaxReconnect = c.ReconnectMaxRetry
+
 	if logger != nil {
 		logger.Debug(fmt.Sprintf("opts = %v", opts))
 	}
+
+	// Check if NATS connection exists
 	if c.NatsConnection == nil {
 		nc, err = opts.Connect()
 		if err != nil {
@@ -56,24 +61,32 @@ func (c *NatsConnector) Connect(logger *logrus.Logger) error {
 		c.NatsConnection = nc
 	}
 
-	if c.EnableStreaming {
-		if c.StanConnection == nil {
+	if c.EnableStreaming { // if streaming is enabled
+
+		// Check if STAN connection exists
+		if c.StanConnection == nil { // if STAN connection has not yet established
+
 			if len(c.StanClusterId) == 0 {
 				return fmt.Errorf("StanClusterId cannot be empty")
 			}
 			if len(c.StanChannelId) == 0 {
 				return fmt.Errorf("StanChannelId cannot be empty")
 			}
+
+			// Use hostname as client-id
 			hostname, err = os.Hostname()
 			if err != nil {
 				return err
 			}
+
 			if logger != nil {
 				logger.Debug(fmt.Sprintf("c.StanClusterId = %v", c.StanClusterId))
 				logger.Debug(fmt.Sprintf("c.StanChannelId = %v", c.StanChannelId))
 				logger.Debug(fmt.Sprintf("hostname = %v", hostname))
 				logger.Debug("Connecting to NATS Streaming Server")
 			}
+
+			// Connect STAN server
 			sc, err = stan.Connect(c.StanClusterId, hostname, stan.NatsConn(nc))
 			if err != nil {
 				return err
@@ -83,7 +96,7 @@ func (c *NatsConnector) Connect(logger *logrus.Logger) error {
 				logger.Debug(fmt.Sprintf("c.StanConnection = %v", c.StanConnection))
 				logger.Debug("Connected NATS Streaming Serversuccessfully")
 			}
-			
+
 		}
 	}
 
@@ -95,7 +108,7 @@ func (c *NatsConnector) QueueSubscribe(logger *logrus.Logger, fn SubscriberFunct
 	if logger != nil {
 		logger.Debug("Running NatsConnector.QueueSubscribe...")
 		logger.Debug(fmt.Sprintf("natsConnector.EnableStreaming = %v", c.EnableStreaming))
-		logger.Debug(fmt.Sprintf("natsConnector.StanConnection = %v", c.StanConnection))	
+		logger.Debug(fmt.Sprintf("natsConnector.StanConnection = %v", c.StanConnection))
 	}
 
 	if c.EnableStreaming && c.StanConnection == nil {
@@ -109,7 +122,7 @@ func (c *NatsConnector) QueueSubscribe(logger *logrus.Logger, fn SubscriberFunct
 		if logger != nil {
 			logger.Debug(fmt.Sprintf("natsConnector.StanConnection = %v", c.StanConnection))
 		}
-		
+
 	}
 
 	if c.EnableStreaming && c.StanConnection != nil {
@@ -120,36 +133,36 @@ func (c *NatsConnector) QueueSubscribe(logger *logrus.Logger, fn SubscriberFunct
 		if len(c.QueueGroup) == 0 {
 			return fmt.Errorf("QueueGroup cannot be empty")
 		}
-		
+
 		if logger != nil {
 			logger.Debug("Calling StanConnection.QueueSubscribe...")
 		}
-		
+
 		sc = *c.StanConnection
-		if len(c.StanDurableName) > 0 {
-			if logger != nil {
-				logger.Debug(fmt.Sprintf("c.StanDurableName = %v", c.StanDurableName))
-			}
-			stanSubscription, err = sc.QueueSubscribe(c.StanChannelId, c.QueueGroup, func(m *stan.Msg) {
-				if logger != nil {
-					logger.Debug(fmt.Sprintf("stan.Msg = %v", *m))
-				}
-				payload := map[string]interface{}{
-					"stanMsg": m,
-				}
-				go fn(logger, payload)
-			}, stan.DurableName(c.StanDurableName), stan.MaxInflight(c.StanSubscriberMaxInFlightMessages))
-		} else {
-			stanSubscription, err = sc.QueueSubscribe(c.StanChannelId, c.QueueGroup, func(m *stan.Msg) {
-				if logger != nil {
-					logger.Debug(fmt.Sprintf("stan.Msg = %v", *m))
-				}
-				payload := map[string]interface{}{
-					"stanMsg": m,
-				}
-				go fn(logger, payload)
-			}, stan.MaxInflight(c.StanSubscriberMaxInFlightMessages))
+		if logger != nil {
+			logger.Debug(fmt.Sprintf("c.StanDurableName = %v", c.StanDurableName))
 		}
+		stanSubscriptionOptions := make([]stan.SubscriptionOption, 0)
+		if len(c.StanDurableName) > 0 {
+			stanSubscriptionOptions = append(stanSubscriptionOptions, stan.DurableName(c.StanDurableName)) //nolint:ineffassign
+		}
+		if c.StanSubscriberMaxInFlightMessages > 0 {
+			stanSubscriptionOptions = append(stanSubscriptionOptions, stan.MaxInflight(c.StanSubscriberMaxInFlightMessages)) //nolint:ineffassign
+		}
+		if c.StanManualAcknowledge {
+			stanSubscriptionOptions = append(stanSubscriptionOptions, stan.SetManualAckMode()) //nolint:ineffassign
+		}
+
+		stanSubscription, err = sc.QueueSubscribe(c.StanChannelId, c.QueueGroup, func(m *stan.Msg) {
+			if logger != nil {
+				logger.Debug(fmt.Sprintf("stan.Msg = %v", *m))
+			}
+			payload := map[string]interface{}{
+				"stanMsg": m,
+			}
+			go fn(logger, payload)
+
+		}, stanSubscriptionOptions...)
 
 		if err != nil {
 			return err
